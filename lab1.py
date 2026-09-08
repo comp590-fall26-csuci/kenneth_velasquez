@@ -1,7 +1,8 @@
-n = 25
-a, b = 0, 1
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
 
-with open("output/fibonacci.txt", "w") as f:
-    for _ in range(n):
-        f.write(f"{a}\n")
-        a, b = b, a + b
+with open("output/rfibonacci.txt", "w") as f:
+    for i in range(25):
+        f.write(f"{fib(i)}\n")
