@@ -8,23 +8,20 @@ on:
 
 jobs:
   build:
-
+    defaults:
+      run:
+        working-directory: ./lab3
+        
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Compile the program
-      run: | 
-        cd lab3
-        make main
+      run: make main
         
     - name: Run the program
-      run: |
-        cd lab3
-        make run
+      run: make run
 
     - name: Clean up build artifacts
-      run: |
-        cd lab3
-        make clean
+      run: make clean
