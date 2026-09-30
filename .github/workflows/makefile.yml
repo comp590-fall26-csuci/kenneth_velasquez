@@ -15,7 +15,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Navigate into lab3 directory
-    - run: cd lab3
+      run: cd lab3
 
     - name: Compile the program
       run: make main
