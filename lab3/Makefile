@@ -1,5 +1,5 @@
-main: main.c fibonacci.c
-	cc -I headers main.c fibonacci.c -o main
+main: 590MakefileLab/main.c 590MakefileLab/fibonacci.c
+	cc -I 590MakefileLab/headers 590MakefileLab/main.c 590MakefileLab/fibonacci.c -o main
 
 run: main
 	./main
