@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Make test script executable
+      run: chmod +x test.sh
+
     - name: Compile, run, and test program
       run: ./test.sh
 
