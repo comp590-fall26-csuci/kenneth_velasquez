@@ -17,11 +17,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Compile the program
-      run: make main
-        
-    - name: Run the program
-      run: make run
+    - name: Compile, run, and test program
+      run: ./test.sh
 
     - name: Clean up build artifacts
       run: make clean
