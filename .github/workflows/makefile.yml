@@ -1,0 +1,27 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    defaults:
+      run:
+        working-directory: ./lab3
+        
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Make test script executable
+      run: chmod +x test.sh
+
+    - name: Compile, run, and test program
+      run: ./test.sh
+
+    - name: Clean up build artifacts
+      run: make clean
