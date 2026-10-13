@@ -7,6 +7,46 @@ on:
     branches: [ "main" ]
 
 jobs:
+  semgrep:
+    name: semgrep-oss/scan
+    runs-on: ubuntu-latest
+
+    container:
+      image: semgrep/semgrep
+
+    if: (github.actor != 'dependabot[bot]')
+
+    steps:
+      # Fetch project source with GitHub Actions Checkout. Use either v3 or v4.
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # Run the "semgrep scan" command on the command line of the docker image.
+      - name: Run semgrep scan
+        run: semgrep scan --config auto
+
+  fuzz:
+    runs-on: ubuntu-latest
+
+    container:
+      image: aflplusplus/aflplusplus:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compile dvcp.c from Root
+        run: |
+          afl-cc -g -fsanitize=address ./dvcp.c -o dvcp
+
+      - name: Run AFL++ Fuzzer for 3 Minutes
+        timeout-minutes: 5
+        run: |
+          mkdir -p seeds_dir
+          echo "IMG" > seeds_dir/seed.bin
+          mkdir -p output_dir
+
+          afl-fuzz -i seeds_dir -o output_dir -V 180 -t 100+ -- ./dvcp @@
+
   build:
     defaults:
       run:
@@ -15,7 +55,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code  
+      uses: actions/checkout@v4
+    
+    - name: Compile and run unit tests
+      run: |
+        make tests
+        ./test_runner
 
     - name: Make test script executable
       run: chmod +x test.sh
