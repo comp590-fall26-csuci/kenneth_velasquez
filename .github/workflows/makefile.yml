@@ -39,7 +39,7 @@ jobs:
           afl-cc -g -fsanitize=address ./dvcp.c -o dvcp
 
       - name: Run AFL++ Fuzzer for 3 Minutes
-        timout-minutes: 5
+        timeout-minutes: 5
         run: |
           mkdir -p seeds_dir
           echo "IMG" > seeds_dir/seed.bin
