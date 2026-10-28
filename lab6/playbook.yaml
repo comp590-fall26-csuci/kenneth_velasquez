@@ -1,0 +1,21 @@
+- name: Configure Asciinema and Apache2 for Task3
+  hosts: debian_vm
+  become: true
+  tasks:
+    - name: Install asciinema package
+      apt:
+        name: asciinema
+        state: present
+    - name: Install apache2 package
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+    - name: Start and enable Apache service
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+    - name: Create custom debug message on completion
+      debug:
+        msg: "Apache2 and Asciinema are installed for Task3."
