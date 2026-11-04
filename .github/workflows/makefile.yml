@@ -16,6 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Compile and run unit tests
+      run: |
+        make tests
+        ./test_runner
 
     - name: Make test script executable
       run: chmod +x test.sh
