@@ -21,6 +21,7 @@
           - ca-certificates
           - nodejs
         state: present
+        update_cache: yes
     - name: Create git system group
       ansible.builtin.group:
         name: git
