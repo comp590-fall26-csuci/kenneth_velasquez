@@ -1,0 +1,248 @@
+- name: Configure Gitea and Gitea Runner for Lab 7
+  hosts: debian_vm
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    gitea_version: 28.3.0
+    gitea_url: https://dl.gitea.com/gitea/{{ gitea_version }}/gitea-{{ gitea_version }}-linux-amd64
+    gitea_runner_version: 5.4.1
+    gitea_runner_url: "https://dl.gitea.com/gitea-runner/{{ gitea_runner_version }}/gitea-runner-{{ gitea_runner_version }}-linux-amd64"
+    server_domain: "localhost"
+    server_root_url: "http://localhost:3000/"
+  tasks:
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name:
+          # For Gitea
+          - git
+          - sqlite3
+          # For Gitea Runner
+          - curl
+          - ca-certificates
+          - nodejs
+        state: present
+    - name: Create git system group
+      ansible.builtin.group:
+        name: git
+        state: present
+        system: yes
+    - name: Create system user for git
+      ansible.builtin.user:
+        name: git
+        group: git
+        system: yes
+        shell: /bin/bash
+        home: /home/git
+        create_home: yes
+    - name: Create Gitea directory structure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: git
+        group: git
+        mode: '0750'
+      loop:
+        - /var/lib/gitea
+        - /var/lib/gitea/custom
+        - /var/lib/gitea/data
+        - /var/lib/gitea/log
+        - /var/lib/gitea-runner
+    - name: Create Gitea configuration root directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: git
+        mode: '0770'
+      loop:
+        - /etc/gitea
+        - /etc/gitea-runner
+    - name: Download Gitea binary to global path
+      ansible.builtin.get_url:
+        url: "{{ gitea_url }}"
+        dest: /usr/local/bin/gitea
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Download Gitea Runner binary
+      ansible.builtin.get_url:
+        url: "{{ gitea_runner_url }}"
+        dest: /usr/local/bin/gitea-runner
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Generate SECRET_KEY
+      ansible.builtin.command: /usr/local/bin/gitea generate secret SECRET_KEY
+      register: gitea_secret_key
+      args:
+        creates: /etc/gitea/app.ini
+    - name: Generate INTERNAL_TOKEN
+      ansible.builtin.command: /usr/local/bin/gitea generate secret INTERNAL_TOKEN
+      register: gitea_internal_token
+      args:
+        creates: /etc/gitea/app.ini
+    - name: Generate LFS_JWT_SECRET
+      ansible.builtin.command: /usr/local/bin/gitea generate secret LFS_JWT_SECRET
+      register: gitea_lfs_jwt
+      args:
+        creates: /etc/gitea/app.ini
+    - name: Generate JWT_SECRET
+      ansible.builtin.command: /usr/local/bin/gitea generate secret JWT_SECRET
+      register: gitea_jwt_secret
+      args:
+        creates: /etc/gitea/app.ini
+    - name: Generate config file
+      ansible.builtin.copy:
+        dest: /etc/gitea/app.ini
+        owner: root
+        group: git
+        mode: '0660'
+        force: no
+        content: |
+          APP_NAME = Gitea: Git with a cup of tea
+          RUN_USER = git
+          RUN_MODE = prod
+          WORK_PATH = /var/lib/gitea
+
+          [repository]
+          ROOT = /var/lib/gitea/data/gitea-repositories
+
+          [database]
+          DB_TYPE = sqlite3
+          PATH = /var/lib/gitea/data/gitea.db
+
+          [server]
+          SSH_DOMAIN = {{ server_domain }}
+          DOMAIN = {{ server_domain }}
+          HTTP_PORT = 3000
+          ROOT_URL = {{ server_root_url }}
+          DISABLE_SSH = false
+          SSH_PORT = 22
+          LFS_START_SERVER = true
+          LFS_JWT_SECRET = {{ gitea_lfs_jwt.stdout | default('') }}
+
+          [security]
+          INSTALL_LOCK = true
+          SECRET_KEY = {{ gitea_secret_key.stdout | default('') }}
+          INTERNAL_TOKEN = {{ gitea_internal_token.stdout | default('') }}
+
+          [oauth2]
+          JWT_SECRET = {{ gitea_jwt_secret.stdout | default('') }}
+          
+          [actions]
+          ENABLED = true
+
+          [log]
+          MODE = file
+          LEVEL = info
+          ROOT_PATH = /var/lib/gitea/log
+    - name: Generate config template for the runner
+      ansible.builtin.command:
+        cmd: /usr/local/bin/gitea-runner config init --config /etc/gitea-runner/config.yaml
+      args:
+        creates: /etc/gitea-runner/config.yaml
+    - name: Force Gitea Runner configuration to target the Local Host (Not Using Docker for Lab 7)
+      ansible.builtin.replace:
+        path: /etc/gitea-runner/config.yaml
+        regexp: 'labels:.*$'
+        replace: 'labels: ["linux_amd64:host", "ubuntu-latest:host"]'
+    - name: Change app.ini permissions to read-only for git group
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: root
+        group: git
+        mode: '0640'
+      loop:
+        - /etc/gitea/app.ini
+        - /etc/gitea-runner/config.yaml
+    - name: Change Gitea and Gitea Runner config folders to read-only
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: git
+        mode: '0750'
+      loop:
+        - /etc/gitea
+        - /etc/gitea-runner
+    - name: Deploy Gitea systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/gitea.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Gitea (Git with a cup of tea)
+          After=network.target
+
+          [Service]
+          RestartSec=2s
+          Type=simple
+          User=git
+          Group=git
+          WorkingDirectory=/var/lib/gitea/
+          ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
+          Restart=always
+          Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+
+          [Install]
+          WantedBy=multi-user.target
+    - name: Deploy Gitea Runner systemd script
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/gitea-runner.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Gitea Actions runner
+          Documentation=https://gitea.com
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/gitea-runner daemon --config /etc/gitea-runner/config.yaml
+          WorkingDirectory=/var/lib/gitea-runner
+          User=git
+          Group=git
+          Restart=on-failure
+          RestartSec=5s
+          TimeoutStopSec=3h
+
+          [Install]
+          WantedBy=multi-user.target
+    - name: Force systemd daemon-reload
+      ansible.builtin.systemd_service:
+        daemon_reload: yes
+    - name: Enable and start Gitea
+      ansible.builtin.systemd_service:
+        name: gitea
+        enabled: yes
+        state: restarted
+    - name: Wait for Gitea web port to be ready
+      ansible.builtin.wait_for:
+        port: 3000
+        host: 127.0.0.1
+        delay: 2
+        timeout: 30
+    - name: Generate runner registration token from Gitea
+      become_user: git
+      environment:
+        GITEA_WORK_DIR: /var/lib/gitea
+      ansible.builtin.command:
+        cmd: /usr/local/bin/gitea actions generate-runner-token --config /etc/gitea/app.ini
+      register: runner_token
+      changed_when: false
+    - name: Register runner using documentation command
+      ansible.builtin.shell: |
+        cd /var/lib/gitea-runner
+        sudo -u git gitea-runner register --config /etc/gitea-runner/config.yaml --no-interactive --instance "{{ server_root_url }}" --token "{{ runner_token.stdout | trim }}" --name "debian-host-runner" --labels "linux_amd64:host,ubuntu-latest:host,debian-latest:host"
+      args:
+        creates: /var/lib/gitea-runner/.runner
+    - name: Enable and start Gitea Runner service on boot
+      ansible.builtin.systemd_service:
+        name: gitea-runner
+        enabled: yes
+        state: started
